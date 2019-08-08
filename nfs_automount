@@ -210,7 +210,7 @@ function check_remotenfs {
   fi
 
   if [ "${SIMPLE_REMOTE_CHECK}" = "true" ] ; then
-    read -t1 < <(${nccmd} -w 1 ${_remotesystem} 2049 2>&-)
+    ${nccmd} -w 1 ${_remotesystem} 2049 2>&-
     _remotestatus="$?"
   else
     read -t1 < <(${rpcinfocmd} -t ${_remotesystem} nfs 2>&-)
@@ -316,7 +316,13 @@ function nfs_mount {
   if ${_RET} ; then
 
     # Make sure the remote NFS share is available
-    check_remoteshare ${_remotesystem} ${_remoteshare}
+    # This is skipped when SIMPLE_REMOTE_CHECK is set to true
+    if [ "${SIMPLE_REMOTE_CHECK}" = "true" ] ; then
+      _RET=true
+    else
+      check_remoteshare ${_remotesystem} ${_remoteshare}
+    fi
+
     if ${_RET} ; then
 
       # Make sure the local mountpoint exists and is free
