@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
-# Distributed under MIT license 
-# Copyright (c) 2013 Ville Walveranta 
+# Distributed under MIT license
+# Copyright (c) 2013 Ville Walveranta
 # http://my.galagzee.com
 
-# Absolute path to the configuration file 
+# Absolute path to the configuration file
 # (if empty or not defined, the default is
 # 'nfs_automount.conf' in the script's directory)
 CONFIG_FILE=/etc/nfs_automount.conf
@@ -47,7 +47,7 @@ done
 
 function log {
 
-  if [ ! -z "$1" ] ; then 
+  if [ ! -z "$1" ] ; then
     log_msg="$1"
   else
     log_msg="[WARN] Parameter missing (log)!"
@@ -55,7 +55,7 @@ function log {
 
   TAG=${log_msg:0:6}
 
-  if [ ${TAG} = "[CRIT]" ] || [ ${TAG} = "[NOTE]" ] ; then 
+  if [ ${TAG} = "[CRIT]" ] || [ ${TAG} = "[NOTE]" ] ; then
     critical=true
   else
     critical=false
@@ -85,7 +85,7 @@ function log {
       echo ${message}
     fi
   fi
-    
+
   if [ ${TAG} = "[CRIT]" ] ; then
     logger_msg=`echo "nfs_automount: ${log_msg}"`
     logger ${logger_msg}
@@ -117,22 +117,23 @@ check_command umount; umountcmd=${_RET}
 check_command touch; touchcmd=${_RET}
 check_command rm; rmcmd=${_RET}
 check_command awk; awkcmd=${_RET}
+check_command nc; nccmd=${_RET}
 
 
 # -- OPERATIONS --
 
 function get_mount_dataset {
-  if [ ! -z "$1" ] ; then 
+  if [ ! -z "$1" ] ; then
     _mountdataset="$1"
   else
     log "[CRIT] Parameter missing (get_mount_dataset); process aborted!"
     exit 1
   fi
-  
+
   if [ -z ${DELIMITER} ] ; then
     DELIMITER="|"
   fi
-  
+
   _RET=(`echo ${_mountdataset//$DELIMITER/ }`)
   if [ ! -z ${_RET[4]} ] ; then
     _RET[4]=${_RET[3]}/${_RET[4]}
@@ -150,7 +151,7 @@ function get_mount_dataset {
 
 function check_mounted {
   if [ ! -z "$1" ] ; then
-    _localmountpoint="$1" 
+    _localmountpoint="$1"
   else
     log "[CRIT] Parameter missing (check_mounted); process aborted!"
     exit 1
@@ -164,7 +165,7 @@ function check_mounted {
 }
 
 function check_stale {
-  if [ ! -z "$1" ] ; then 
+  if [ ! -z "$1" ] ; then
     _localmountpoint="$1"
   else
     log "[CRIT] Parameter missing (check_stale); process aborted!"
@@ -179,7 +180,7 @@ function check_stale {
 }
 
 function test_remotecheckfile {
-  if [ ! -z "$1" ] ; then 
+  if [ ! -z "$1" ] ; then
     _remotecheckfile="$1"
   else
     _remotecheckfile=""
@@ -197,15 +198,25 @@ function test_remotecheckfile {
 }
 
 function check_remotenfs {
-  if [ ! -z "$1" ] ; then 
+
+  local _remotesystem=""
+  local _remotestatus=""
+
+  if [ ! -z "$1" ] ; then
     _remotesystem="$1"
   else
     log "[CRIT] Parameter missing (check_remotenfs); process aborted!"
     exit 1
   fi
 
-  read -t1 < <(${rpcinfocmd} -t ${_remotesystem} nfs 2>&-)
-  if [ $? -eq 0 ]; then
+  if [ "${SIMPLE_REMOTE_CHECK}" = "true" ] ; then
+    read -t1 < <(${nccmd} -w 1 ${_remotesystem} 2049 2>&-)
+    _remotestatus="$?"
+  else
+    read -t1 < <(${rpcinfocmd} -t ${_remotesystem} nfs 2>&-)
+    _remotestatus="$?"
+  fi
+  if [ $_remotestatus -eq 0 ]; then
     _RET=true
   else
     _RET=false
@@ -213,7 +224,7 @@ function check_remotenfs {
 }
 
 function check_remoteshare {
-  if [ ! -z "$1" ] && [ ! -z $2 ] ; then 
+  if [ ! -z "$1" ] && [ ! -z $2 ] ; then
     _remotesystem="$1"
     _remoteshare="$2"
   else
@@ -230,7 +241,7 @@ function check_remoteshare {
 }
 
 function valid_for_mount {
-  if [ ! -z "$1" ] ; then 
+  if [ ! -z "$1" ] ; then
     _localmountpoint="$1"
   else
     log "[CRIT] Parameter missing (valid_for_mount); process aborted!"
@@ -249,7 +260,7 @@ function valid_for_mount {
 }
 
 function test_rw {
-  if [ ! -z "$1" ] ; then 
+  if [ ! -z "$1" ] ; then
     _rw_testfile="$1"
   else
     _rw_testfile="nfs_automount_rw_test.Kk6MC2CkHoinbSE3CYqv"
@@ -265,7 +276,7 @@ function test_rw {
 }
 
 function nfs_umount {
-  if [ ! -z "$1" ] ; then 
+  if [ ! -z "$1" ] ; then
     _localmountpoint="$1"
   else
     log "[CRIT] Parameter missing (nfs_umount); process aborted!"
@@ -274,7 +285,7 @@ function nfs_umount {
 
   check_mounted "${_localmountpoint}"
   if ${_RET} ; then
-  
+
     ${umountcmd} -f -l "${_localmountpoint}"
     check_mounted "${_localmountpoint}"
     if ${_RET} ; then
@@ -282,15 +293,15 @@ function nfs_umount {
     else
       _RET=true
     fi
-  
+
   else
     _RET=true
   fi
-  
+
 }
 
 function nfs_mount {
-  if [ ! -z "$1" ] && [ ! -z "$2" ] && [ ! -z "$3" ] && [ ! -z "$4" ] ; then 
+  if [ ! -z "$1" ] && [ ! -z "$2" ] && [ ! -z "$3" ] && [ ! -z "$4" ] ; then
     _mountopts="$1"
     _remotesystem="$2"
     _remoteshare="$3"
@@ -301,7 +312,7 @@ function nfs_mount {
   fi
 
   # Make sure remote NFS service is available
-  check_remotenfs ${_remotesystem} 
+  check_remotenfs ${_remotesystem}
   if ${_RET} ; then
 
     # Make sure the remote NFS share is available
@@ -323,18 +334,18 @@ function nfs_mount {
       else
         log "[CRIT] Local mount point '${_localmountpoint}' missing or already in use!"
       fi
-    
+
     else
       log "[CRIT] Remote share '${_remoteshare}' unavailable!"
     fi
-  
+
   else
     log "[CRIT] Remote NFS service unavailable at '${_remotesystem}'!"
   fi
 }
 
 function nfs_remount {
-  if [ ! -z "$1" ] && [ ! -z "$2" ] && [ ! -z "$3" ] && [ ! -z "$4" ] ; then 
+  if [ ! -z "$1" ] && [ ! -z "$2" ] && [ ! -z "$3" ] && [ ! -z "$4" ] ; then
     _mountopts="$1"
     _remotesystem="$2"
     _remoteshare="$3"
@@ -361,7 +372,7 @@ log "[NOTE] Monitoring started."
 while : ; do
 
   if ! ${DEBUGLOG} ; then
-    log "[NOTE] Checking shares. Debug logging disabled." 
+    log "[NOTE] Checking shares. Debug logging disabled."
   fi
 
   mountscnt=${#MOUNTDATA[@]}
@@ -411,33 +422,33 @@ while : ; do
             log "[NOTE] (dataset ${datasetno}) Remote test file not defined. Skipping remote test file check for this dataset."
           fi
 
-          # RO/RW PROCESSING  
+          # RO/RW PROCESSING
           TESTFILE="${LOCALMOUNTPOINT}"/"${RW_TESTFILE}"
           test_rw ${TESTFILE}
           if ${_RET} ; then
             log "[INFO] (dataset ${datasetno}) Mount point '${LOCALMOUNTPOINT}' is writable."
-            
+
             if [ "${READWRITE}" = "ro" ]; then
-              log "[INFO] (dataset ${datasetno}) Read Only mount has been specified. Attempting remount." 
+              log "[INFO] (dataset ${datasetno}) Read Only mount has been specified. Attempting remount."
               nfs_remount "${NFSMOUNTOPTS}" "${REMOTESYSTEM}" "${REMOTESHARE}" "${LOCALMOUNTPOINT}"
             fi
 
           else
             log "[INFO] (dataset ${datasetno}) Mount point '${LOCALMOUNTPOINT}' is not writable."
-            
+
             if [ "${READWRITE}" = "rw" ]; then
-              log "[INFO] (dataset ${datasetno}) Read/Write mount has been specified. Attempting remount." 
+              log "[INFO] (dataset ${datasetno}) Read/Write mount has been specified. Attempting remount."
               nfs_remount "${NFSMOUNTOPTS}" "${REMOTESYSTEM}" "${REMOTESHARE}" "${LOCALMOUNTPOINT}"
             fi
 
           fi
-  
+
         else
           #STALE PROCESSING
           log "[CRIT] (dataset ${datasetno}) Remote NFS share '${REMOTESYSTEM}:${REMOTESHARE}' is stale; attempting remount."
-          
+
           nfs_remount "${NFSMOUNTOPTS}" "${REMOTESYSTEM}" "${REMOTESHARE}" "${LOCALMOUNTPOINT}"
-    
+
         fi
 
       else
@@ -446,27 +457,27 @@ while : ; do
         log "[CRIT] (dataset ${datasetno}) Remote NFS share '${REMOTESYSTEM}:${REMOTESHARE}' is unmounted; attempting mount."
 
         nfs_mount "${NFSMOUNTOPTS}" "${REMOTESYSTEM}" "${REMOTESHARE}" "${LOCALMOUNTPOINT}"
-  
+
       fi
-    
+
     else
       #UNREACHABLE SERVER/NFS SERVICE PROCESSING
       log "[CRIT] (dataset ${datasetno}) Remote server/NFS service at '${REMOTESYSTEM}' unreachable; confirming unmounted status of share '$REMOTESHARE'."
-      
+
       nfs_umount "${LOCALMOUNTPOINT}"
       if ${_RET} ; then
         log "[INFO] (dataset ${datasetno}) Remote server '${REMOTESYSTEM}' or its NFS service is unreachable. Share '${REMOTESHARE}' has been confirmed unmounted!"
       else
         log "[CRIT] (dataset ${datasetno}) Remote server '${REMOTESYSTEM}' or its NFS service is unreachable. Share '${REMOTESHARE}' could not be unmounted!"
       fi
-  
+
     fi
 
   done
 
   # Break here for cron style run
   [[ "${RUNTYPE}" = "service" ]] || break
-  
+
   log "[INFO] Sleeping for ${INTERVAL} seconds."
   sleep $INTERVAL
 
